@@ -7,8 +7,8 @@ import { startPixelCanvas, setPixel, drawPixel, draw } from "./pixel.js"
 let Hooks = {}
 Hooks.Canvas = {
   mounted() {
-    startPixelCanvas(this)
-    this.handleEvent("init_board", ({data}) => {
+    this.handleEvent("init_board", ({data, authenticated}) => {
+      startPixelCanvas(this, authenticated);
       const total = data.length;
       let loading = document.getElementById('loading');
       let completed = 0;

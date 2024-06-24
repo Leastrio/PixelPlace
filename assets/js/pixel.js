@@ -20,7 +20,7 @@ const colors = {
   "black": [0, 0, 0]
 }
 
-let canvas, ctx, border, coords, selectedHex, selectedBubble, colorPicker;
+let canvas, ctx, border, coords, selectedHex, selectedBubble, colorPicker, authenticated;
 let prevX = 0;
 let prevY = 0;
 let isPanning = false;
@@ -66,7 +66,7 @@ function getMousePos(evt) {
 function drawBorder(mousePos) {
   const scale = view.scale;
 
-  if (mousePos.x < 0 || mousePos.x > config.width - 1 || mousePos.y < 0 || mousePos.y > config.height - 1 || view.scale <= 7) {
+  if (!authenticated || mousePos.x < 0 || mousePos.x > config.width - 1 || mousePos.y < 0 || mousePos.y > config.height - 1 || view.scale <= 7) {
     border.style.display = 'none';
   } else {
     border.style.left = (mousePos.x * scale + view.x) + 'px';
@@ -141,7 +141,8 @@ function initCanvas() {
   imgctx.fillRect(imgCanvas.width - 1, 0, 1, imgCanvas.height);
 }
 
-export function startPixelCanvas(lv) {
+export function startPixelCanvas(lv, inc_authenticated) {
+  authenticated = inc_authenticated;
   canvas = document.getElementById('drawingCanvas');
   ctx = canvas.getContext('2d');
   border = document.getElementById('pixelBorder');
@@ -167,7 +168,7 @@ export function startPixelCanvas(lv) {
       const pos = getMousePos(evt);
       const x = pos.x
       const y = pos.y
-      if (x >= 0 && x < config.width && y >= 0 && y < config.height) {
+      if (authenticated && x >= 0 && x < config.width && y >= 0 && y < config.height) {
         drawPixel(x, y, selectedColor);
         lv.pushEvent("draw_pixel", {x, y, selectedColor});
       }
@@ -303,6 +304,12 @@ export function startPixelCanvas(lv) {
       br1.classList.add('hidden');
     }
   });
+
+  if (authenticated == false) {
+    document.getElementById('discordLogin').addEventListener('click', () => {
+      window.location.href = "/login";
+    });
+  }
 }
 
 function parseHex(hex) {

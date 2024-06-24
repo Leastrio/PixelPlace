@@ -55,6 +55,7 @@ defmodule PixelPlace.MixProject do
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.2"},
       {:ecto_sqlite3_extras, "~> 1.2.0"},
+      {:req, "~> 0.5.0"}
     ]
   end
 

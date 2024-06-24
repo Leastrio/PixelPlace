@@ -14,5 +14,8 @@ defmodule PixelPlaceWeb.Router do
     pipe_through :browser
 
     live "/", IndexLive
+
+    get "/login", PageController, :login
+    get "/authorize", PageController, :authorize
   end
 end

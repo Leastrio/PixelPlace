@@ -5,7 +5,7 @@ defmodule PixelPlaceWeb.IndexLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+    <div id="loadingScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center" phx-update="ignore">
       <p class="mb-3">Loading pixels...</p>
       <p id="loading" class="font-black"></p>
     </div>
@@ -25,7 +25,7 @@ defmodule PixelPlaceWeb.IndexLive do
             </svg>
           </button>
         </div>
-        <br id="br-1" class="hidden sm:block">
+        <br id="br-1" class="hidden">
         <div id="swatches" class="bg-white m-4 mt-0 rounded-lg shadow-2xl pointer-events-auto hidden sm:inline-block">
           <button id="red" class="w-12 m-3 bg-red-300 p-4 rounded-lg shadow-xl"></button><br>
           <button id="orange" class="w-12 m-3 bg-orange-300 p-4 rounded-lg shadow-xl"></button><br>
@@ -50,29 +50,78 @@ defmodule PixelPlaceWeb.IndexLive do
           </button>
         </div>
       </div>
-      <div class="absolute top-0 right-0 bg-white m-4 rounded-lg shadow-2xl pointer-events-auto">
-          <p id="coords" class="p-3 font-bold">(0, 0)</p>
+      <div class="absolute top-0 right-0">
+        <%= if @discord_id == nil do %>
+          <button id="discordLogin" class="m-4 mb-0 bg-blurple p-4 rounded-lg shadow-xl font-bold text-white flex items-center">
+            <svg class="size-8 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 127.14 96.36">
+              <path fill="#fff" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+            </svg>
+            Login with Discord
+          </button>
+        <% end %>
+        <div class="text-right">
+          <div class="inline-block bg-white max-w-max m-4 mb-0 rounded-lg shadow-2xl pointer-events-auto">
+            <p class="p-3 font-bold flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6 mr-2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+              Online: <%= @online_count %>
+            </p>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="inline-block bg-white max-w-max m-4 rounded-lg shadow-2xl pointer-events-auto">
+            <p id="coords" class="p-3 font-bold">(0, 0)</p>
+          </div>
+        </div>
       </div>
     </div>
     """
   end
 
   @impl true
-  def mount(_params, _session, socket) do
-    PixelPlaceWeb.Endpoint.subscribe("room:lobby")
-    {:ok, push_event(socket, "init_board", %{data: PixelPlace.Pixel.get_all()})}
+  def mount(_params, session, socket) do
+    socket = socket |> assign(:online_count, PixelPlaceWeb.Presence.online_count())
+
+    if connected?(socket) do
+      PixelPlaceWeb.Presence.track_user(socket.id)
+      PixelPlaceWeb.Presence.subscribe()
+      PixelPlaceWeb.Endpoint.subscribe("room:lobby")
+      discord_id = get_in(PixelPlace.Session.get(session["session_token"]), [Access.key!(:discord_id)])
+      socket = socket
+        |> push_event("init_board", %{data: PixelPlace.Pixel.get_all(), authenticated: !is_nil(discord_id)})
+        |> assign(:discord_id, discord_id)
+
+      {:ok, socket}
+    else
+      {:ok, assign(socket, :discord_id, nil)}
+    end
   end
 
   @impl true
   def handle_event("draw_pixel", %{"x" => x, "y" => y, "selectedColor" => [r, g, b]}, socket) do
-    color = (r <<< 16) + (g <<< 8) + b
-    PixelPlace.Pixel.upsert_pixel(x, y, color);
-    PixelPlaceWeb.Endpoint.broadcast("room:lobby", "pixel", {x, y, [r, g, b]})
-    {:noreply, socket}
+    discord_id = socket.assigns.discord_id
+    if is_nil(discord_id) do
+      {:noreply, socket |> put_flash(:error, "You must login first to place a pixel!")}
+    else
+      color = (r <<< 16) + (g <<< 8) + b
+      PixelPlace.Pixel.upsert_pixel(x, y, color, discord_id);
+      PixelPlaceWeb.Endpoint.local_broadcast("room:lobby", "pixel", {x, y, [r, g, b], discord_id})
+      {:noreply, socket}
+    end
   end
 
   @impl true
-  def handle_info(%{event: "pixel", payload: {x, y, color}}, socket) do
-    {:noreply, push_event(socket, "draw_pixel", %{x: x, y: y, color: color})}
+  def handle_info(%{event: "pixel", payload: {x, y, color, discord_id}}, socket) do
+    if discord_id == socket.assigns.discord_id do
+      {:noreply, socket}
+    else
+      {:noreply, push_event(socket, "draw_pixel", %{x: x, y: y, color: color})}
+    end
+  end
+
+  @impl true
+  def handle_info({:online_count, count}, socket) do
+    {:noreply, assign(socket, :online_count, count)}
   end
 end
